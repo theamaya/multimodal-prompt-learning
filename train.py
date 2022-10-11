@@ -22,6 +22,7 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
+import datasets.imagenetLT
 
 import trainers.coop
 import trainers.cocoop
@@ -116,8 +117,8 @@ def extend_cfg(cfg):
     cfg.TRAINER.IVLP.CTX_INIT = "a photo of a"  # initialization words (only for language prompts)
     cfg.TRAINER.IVLP.PREC = "fp16"  # fp16, fp32, amp
     # If both variables below are set to 0, 0, will the config will degenerate to COOP model
-    cfg.TRAINER.IVLP.PROMPT_DEPTH_VISION = 9 # Max 12, minimum 0, for 0 it will act as shallow MaPLe (J=1)
-    cfg.TRAINER.IVLP.PROMPT_DEPTH_TEXT = 9  # Max 12, minimum 0, for 0 it will act as shallow MaPLe (J=1)
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_VISION = 0 # Max 12, minimum 0, for 0 it will act as shallow MaPLe (J=1)
+    cfg.TRAINER.IVLP.PROMPT_DEPTH_TEXT = 0  # Max 12, minimum 0, for 0 it will act as shallow MaPLe (J=1)
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
     # Config for only vision side prompting

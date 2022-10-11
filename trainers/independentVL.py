@@ -17,6 +17,12 @@ from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 _tokenizer = _Tokenizer()
 
+def lgadjusted_cross_entropy(output, label, prob_list):
+    y = torch.exp(output.double()) * prob_list
+    logprobs = torch.log(y / torch.sum(y, dim=-1).unsqueeze(1))
+    loss = -torch.sum(logprobs * F.one_hot(label, 100), dim=-1)
+
+    return loss.mean()
 
 def load_clip_to_cpu(cfg):
     backbone_name = cfg.MODEL.BACKBONE.NAME
@@ -98,7 +104,6 @@ class VLPromptLearner(nn.Module):
         print(f"Number of context words (tokens) for Language prompting: {n_ctx}")
         print(f"Number of context words (tokens) for Vision prompting: {cfg.TRAINER.IVLP.N_CTX_VISION}")
         self.ctx = nn.Parameter(ctx_vectors)
-
         classnames = [name.replace("_", " ") for name in classnames]
         name_lens = [len(_tokenizer.encode(name)) for name in classnames]
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
@@ -161,6 +166,7 @@ class CustomCLIP(nn.Module):
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
 
+
     def forward(self, image, label=None):
         tokenized_prompts = self.tokenized_prompts
         logit_scale = self.logit_scale.exp()
@@ -173,8 +179,9 @@ class CustomCLIP(nn.Module):
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         logits = logit_scale * image_features @ text_features.t()
 
-        if self.prompt_learner.training:
-            return F.cross_entropy(logits, label)
+        # if self.prompt_learner.training:
+        #     return F.cross_entropy(logits, label)
+        #     return lgadjusted_cross_entropy(logits, label, self.prob_list)
 
         return logits
 
@@ -206,6 +213,8 @@ class IVLP(TrainerX):
                 # Make sure that VPT prompts are updated
                 if "VPT" in name:
                     param.requires_grad_(True)
+                elif "logit_scale" in name:
+                    param.requires_grad_(True)
                 else:
                     param.requires_grad_(False)
 
@@ -234,6 +243,8 @@ class IVLP(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
+        self.prob_list = torch.load('/home/amaya/repos/CoOp_experiments/imagenet_probabilities.pt')[:100].to(self.device)
+
     def forward_backward(self, batch):
         image, label = self.parse_batch_train(batch)
 
@@ -244,13 +255,17 @@ class IVLP(TrainerX):
         prec = self.cfg.TRAINER.IVLP.PREC
         if prec == "amp":
             with autocast():
-                loss = model(image, label)
+                logits = model(image, label)
+                loss = lgadjusted_cross_entropy(logits, label, self.prob_list)
+                # loss = model(image, label)
             optim.zero_grad()
             scaler.scale(loss).backward()
             scaler.step(optim)
             scaler.update()
         else:
-            loss = model(image, label)
+            logits = model(image, label)
+            loss= lgadjusted_cross_entropy(logits, label, self.prob_list)
+            # loss = model(image, label)
             optim.zero_grad()
             loss.backward()
             optim.step()

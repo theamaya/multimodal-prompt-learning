@@ -1,3 +1,3 @@
-ftfy==6.1.1
-regex==2.5.112
+ftfy
+regex
 tqdm==4.64.0
