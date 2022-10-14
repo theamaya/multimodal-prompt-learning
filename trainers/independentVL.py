@@ -18,31 +18,50 @@ from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 _tokenizer = _Tokenizer()
 
 def lgadjusted_cross_entropy(output, label, prob_list):
+    # return F.cross_entropy(output, label)
     y = torch.exp(output.double()) * prob_list
     logprobs = torch.log(y / torch.sum(y, dim=-1).unsqueeze(1))
-    loss = -torch.sum(logprobs * F.one_hot(label, 100), dim=-1)
-
+    loss = -torch.sum(logprobs * F.one_hot(label, 1000), dim=-1)
     return loss.mean()
 
 def load_clip_to_cpu(cfg):
     backbone_name = cfg.MODEL.BACKBONE.NAME
-    url = clip._MODELS[backbone_name]
-    model_path = clip._download(url)
-
-    try:
-        # loading JIT archive
-        model = torch.jit.load(model_path, map_location="cpu").eval()
-        state_dict = None
-
-    except RuntimeError:
-        state_dict = torch.load(model_path, map_location="cpu")
     design_details = {"trainer": 'IVLP',
                       "vision_depth": cfg.TRAINER.IVLP.PROMPT_DEPTH_VISION,
                       "language_depth": cfg.TRAINER.IVLP.PROMPT_DEPTH_TEXT, "vision_ctx": cfg.TRAINER.IVLP.N_CTX_VISION,
                       "language_ctx": cfg.TRAINER.IVLP.N_CTX_TEXT}
-    model = clip.build_model(state_dict or model.state_dict(), design_details)
 
-    return model
+    if cfg.MODEL.BACKBONE.PRETRAINED:
+        model_path= cfg.MODEL.BACKBONE.PRETRAINED_PATH
+        try:
+            # loading JIT archive
+            model = torch.jit.load(model_path, map_location="cpu").eval()
+            state_dict = None
+
+        except RuntimeError:
+            state_dict = torch.load(model_path, map_location="cpu")
+
+        print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.PRETRAINED_PATH})")
+        model = clip.build_model(state_dict['model'] or model.state_dict(), design_details)
+
+        return model
+
+    else:
+        url = clip._MODELS[backbone_name]
+        model_path = clip._download(url)
+
+        try:
+            # loading JIT archive
+            model = torch.jit.load(model_path, map_location="cpu").eval()
+            state_dict = None
+
+        except RuntimeError:
+            state_dict = torch.load(model_path, map_location="cpu")
+
+        print(f"Loading CLIP (backbone: {model_path})")
+        model = clip.build_model(state_dict or model.state_dict(), design_details)
+
+        return model
 
 
 class TextEncoder(nn.Module):
@@ -243,7 +262,7 @@ class IVLP(TrainerX):
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
 
-        self.prob_list = torch.load('/home/amaya/repos/CoOp_experiments/imagenet_probabilities.pt')[:100].to(self.device)
+        self.prob_list = torch.load('/nfs/users/ext_amaya.dharmasiri/repos/VL-LTR/imagenet_probabilities.pt').to(self.device)
 
     def forward_backward(self, batch):
         image, label = self.parse_batch_train(batch)

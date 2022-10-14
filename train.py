@@ -22,7 +22,7 @@ import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
 import datasets.imagenet_r
-import datasets.imagenetLT
+import datasets.ImageNetLT
 
 import trainers.coop
 import trainers.cocoop
@@ -75,6 +75,15 @@ def reset_cfg(cfg, args):
 
     if args.head:
         cfg.MODEL.HEAD.NAME = args.head
+    
+    if args.pretrained_backbone:
+        print('pretrained backbone given.')
+        cfg.MODEL.BACKBONE.PRETRAINED = True
+        cfg.MODEL.BACKBONE.PRETRAINED_PATH = args.pretrained_backbone
+
+    else:
+        cfg.MODEL.BACKBONE.PRETRAINED= False
+        cfg.MODEL.BACKBONE.PRETRAINED_PATH = None
 
 
 def extend_cfg(cfg):
@@ -230,6 +239,12 @@ if __name__ == "__main__":
         default=None,
         nargs=argparse.REMAINDER,
         help="modify config options using the command-line",
+    )
+    parser.add_argument(
+        "--pretrained_backbone",
+        type=str,
+        default=None,
+        help="load model from this directory for pretraied CLIP",
     )
     args = parser.parse_args()
     main(args)
